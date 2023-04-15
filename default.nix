@@ -1,4 +1,4 @@
-{ lib, stdenv, fetchurl, alsaLib, dbus, ffmpeg, libGL, libpulseaudio, libva
+{ lib, addOpenGLRunpath, stdenv, fetchurl, alsaLib, dbus, ffmpeg_4, libGL, libpulseaudio, libva, libXfixes, gnome
 , openssl, udev, xorg, wayland }:
 
 stdenv.mkDerivation {
@@ -19,20 +19,25 @@ stdenv.mkDerivation {
     sha256 = "N4FxUutU9risxP77vMKkT87rr1O8JMpNLiLRptpWac4=";
   };
   latest_parsecd_so = fetchurl {
-    url ="https://builds.parsecgaming.com/channel/release/binary/linux/gz/parsecd-150-86e.so";
-    sha256 = "0isxcyzlsj0ff2h6lwf3splf7wihmqnzk77n2qr48d9yvfm67rmh";
+    url ="https://builds.parsecgaming.com/channel/release/binary/linux/gz/parsecd-150-87.so";
+    sha256 = "GNyn+jaxSVM5noUxyTAdSK2DriwbtQeG3Qyg25760nU=";
   };
 
   postPatch = ''
     cp $latest_appdata usr/share/parsec/skel/appdata.json
-    cp $latest_parsecd_so usr/share/parsec/skel/parsecd-150-85c.so
+    cp $latest_parsecd_so usr/share/parsec/skel/parsecd-150-87.so
   '';
+
+  nativeBuildInputs = [
+    addOpenGLRunpath
+  ];
 
   runtimeDependencies = [
     alsaLib (lib.getLib dbus) libGL libpulseaudio libva.out
     (lib.getLib openssl) (lib.getLib stdenv.cc.cc) (lib.getLib udev)
     xorg.libX11 xorg.libXcursor xorg.libXi xorg.libXinerama xorg.libXrandr
-    xorg.libXScrnSaver wayland (lib.getLib ffmpeg)
+    xorg.libXScrnSaver wayland (lib.getLib ffmpeg_4)
+    libXfixes
   ];
 
   unpackPhase = ''
@@ -49,6 +54,7 @@ stdenv.mkDerivation {
     # install logic in a wrapper script.
     cat >$out/bin/parsecd <<EOF
     #! /bin/sh
+    PATH=$PATH:${gnome.zenity}/bin
     mkdir -p \$HOME/.parsec
     ln -sf $out/libexec/skel/* \$HOME/.parsec
     exec $out/libexec/parsecd "\$@"
@@ -67,6 +73,12 @@ stdenv.mkDerivation {
     done
     patchelf --set-rpath "$rpath" $out/libexec/parsecd
     patchelf --set-rpath "$rpath" $out/libexec/skel/*.so
+
+    #<<< copied from nixpkgs::pkgs/development/libraries/ffmpeg/generic.nix >>>
+    # Set RUNPATH so that libnvcuvid and libcuda in /run/opengl-driver(-32)/lib can be found.
+    # See the explanation in addOpenGLRunpath.
+    addOpenGLRunpath $out/libexec/parsecd
+    addOpenGLRunpath $out/libexec/skel/*.so
   '';
 
   meta = with lib; {
